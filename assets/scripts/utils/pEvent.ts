@@ -18,7 +18,7 @@ export namespace pEvent {
         invoke(event: TEventType, ...args: any[]): any[];
     }
 
-    interface _IOption<TEvent extends pFlex.TKey, TSelf = any> {
+    export interface IOption<TEvent extends pFlex.TKey, TSelf = any> {
         log?: boolean;
         alias?: string;
         global?: boolean;
@@ -28,10 +28,14 @@ export namespace pEvent {
     }
 
     export class Handler<TEvent extends pFlex.TKey> implements IDriver<TEvent> {
-        public static create<TEvent extends pFlex.TKey>(opt?: _IOption<TEvent, Handler<TEvent>>) {
-            const ret = new Handler<TEvent>();
+        public static create<TEvent extends pFlex.TKey>(opt?: IOption<TEvent, Handler<TEvent>>) {
+            const ret = this._create();
             ret._init(opt);
             return ret;
+        }
+
+        protected static _create() {
+            return new Handler<any>();
         }
 
         constructor() {
@@ -47,7 +51,7 @@ export namespace pEvent {
                 alias = '[EventDriver]',
                 after = () => {},
                 global = false
-            }: _IOption<TEvent> = {}): void 
+            }: IOption<TEvent> = {}): void 
         {
             global && ((globalThis as any)[alias] = this);
             this.__key_   = key;
@@ -168,6 +172,22 @@ export namespace pEvent {
 
         off(events: TFlex<TEvent>) {
             for(const [ _key, _function, _this ] of events) this.remove(_key, { _function, _this });
+        }
+
+        off_from_binder(_binder: any) {
+            if(!_binder) return;
+
+            for(const key in this.__events_) {
+                const _key = key as TEvent;
+                const opts = this._get(_key);
+                if(!opts) continue;
+
+                const index = opts.findIndex( opt => opt._this === _binder );
+                if(index >= 0) {
+                    opts.splice(index, 1);
+                    this.__log_ && this.log(`${this.__alias_} Log: Removed listener from event`, _key, "with function", _binder);
+                }
+            }
         }
     }
 

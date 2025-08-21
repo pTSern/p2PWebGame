@@ -19,11 +19,7 @@ export class Connection extends Component {
 
     @type(Prefab) prefab!: Prefab;
 
-    public static get instance() { return this._instance; }
-    protected static _instance: Connection = null;
-
     protected onLoad(): void {
-        Connection._instance = this;
         pComponent.adds( 
             {
                 _options: [
@@ -35,81 +31,44 @@ export class Connection extends Component {
                 _binder: this
             }
         )
-        EventManager.on(this._events);
-        this._act_create_offer();
+
+        p2PConnector.on([
+            ['onDataChannel', this._ready, this],
+            ['onConnected', this._ready, this],
+            ['onHaveOffer', this._on_have_offer, this],
+            ['onHaveAnswer', this._on_have_answer, this],
+        ])
+    }
+
+    protected _on_have_answer(_answer: string) {
+        this.edit_answer.string = _answer;
+    }
+
+    protected _on_have_offer(_offer: string) {
+        this.edit_offer.string = _offer;
+    }
+
+    protected _act_create_offer() {
+        p2PConnector.make_offer();
+    }
+
+    protected _act_apply_offer() {
+        const _offer = this.edit_offer.string;
+        _offer && p2PConnector.apply_offer(_offer);
+    }
+
+    protected _act_apply_answer() {
+        const _answer = this.edit_answer.string;
+        _answer && p2PConnector.apply_answer(_answer);
     }
 
     protected onDestroy(): void {
-        Connection._instance = null;
-        EventManager.off(this._events);
-        this._dc = null;
-    }
-
-    private _events: pEvent.TFlex<NSEventDefine.TEvents> = [
-        ['onRTCDataChannel', this._on_chanel, this],
-    ]
-
-    protected _dc: RTCDataChannel = null;
-    get dc() { return this._dc }
-
-    protected async _act_apply_offer() {
-        const _offer = await pCrypto.unpacker(this.edit_offer.string);
-        await p2PConnector.setRemoteDescription(_offer);
-        const _answer = await p2PConnector.createAnswer();
-        await p2PConnector.setLocalDescription(_answer);
-
-        await this._wait_for_ice_gathering_complete();
-        this.edit_answer.string = await pCrypto.packer(p2PConnector.localDescription);
-    }
-
-    protected async _act_create_offer() {
-        const _dc = p2PConnector.createDataChannel('chat', { ordered: true });
-        this._setdc(_dc);
-
-        const _offer = await p2PConnector.createOffer();
-        await p2PConnector.setLocalDescription(_offer);
-
-        await this._wait_for_ice_gathering_complete();
-        const _out = await pCrypto.packer(p2PConnector.localDescription);
-        console.log('Create Offer', _out);
-        this.edit_offer.string = _out;
-    }
-
-    protected async _act_apply_answer() {
-        const _answer = await pCrypto.unpacker(this.edit_answer.string);
-        await p2PConnector.setRemoteDescription(_answer);
-        EventManager.invoke('onConnected')
-
-        this._ready();
+        p2PConnector.off_from_binder(this);
     }
 
     protected _ready() {
         const _prefab = instantiate(this.prefab);
         this.node.parent.addChild(_prefab);
+        this.node.destroy();
     }
-
-    protected _wait_for_ice_gathering_complete(): Promise<void> {
-        if(p2PConnector.iceGatheringState === 'complete') return Promise.resolve();
-
-        return new Promise<void>( _rs => {
-            const _check = () => {
-                if(p2PConnector.iceGatheringState === 'complete') {
-                    p2PConnector.removeEventListener('icegatheringstatechange', _check);
-                    _rs();
-                }
-            }
-            p2PConnector.addEventListener('icegatheringstatechange', _check);
-        })
-    }
-
-    protected _on_chanel(_channel: RTCDataChannel) {
-        this._setdc(_channel);
-        this._ready();
-    }
-
-    protected _setdc(_dc: RTCDataChannel) {
-        this._dc = _dc;
-        this._dc.onmessage = _event => EventManager.invoke('onMessage', _event.data);
-    }
-
 }

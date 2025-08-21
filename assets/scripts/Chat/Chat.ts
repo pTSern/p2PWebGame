@@ -5,6 +5,7 @@ import pConsoler from "../utils/pConsoler";
 import EventManager from "../event/EventManager";
 import pEvent from "../utils/pEvent";
 import { NSEventDefine } from "../event/EventDefine";
+import p2PConnector from "../core/p2PConnector";
 
 const { ccclass, type } = _decorator;
 
@@ -35,7 +36,7 @@ export class Chat extends Component {
     ]
 
     protected _act_send() {
-        Connection.instance.dc.send(this.edit_chat.string);
+        p2PConnector.dc.send(this.edit_chat.string);
         pConsoler.log("You: " + this.edit_chat.string);
     }
 

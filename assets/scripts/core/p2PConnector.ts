@@ -1,35 +1,112 @@
 import Constant from "../Config/Constant";
-import EventManager from "../event/EventManager";
-import pConsoler from "../utils/pConsoler";
+import { pCrypto } from "../utils/pCrypto";
+import pEvent from "../utils/pEvent";
 
-const _pc = new RTCPeerConnection( {
-    iceServers: [ { urls: Constant.ice_server_url } ]
-} )
+//export namespace p2PConnector {
+    export type _TEvent = 'onHaveOffer' | 'onHaveAnswer' | 'onDataChannel' | 'onConnected' | 'onMessage'
+    class _p2PConnector extends pEvent.Handler<_TEvent> {
+        protected _pc: RTCPeerConnection;
+        protected _dc: RTCDataChannel = null;
 
-const log = pConsoler.log.bind(pConsoler, "[RTCPeerConnection] Log >");
+        get dc() { return this._dc }
 
-_pc.onicecandidate = _event => {
-    _event.candidate
-        ? log("Ice candidate:", _event.candidate.candidate)
-        : log("Ice candidate gathering complete");
+        protected static _create() {
+            return new _p2PConnector();
+        }
 
-    const { localDescription, signalingState } = _pc;
-    if(localDescription) {
-        switch(signalingState) {
-            case "have-local-offer":
-            case "stable": {
-                break;
+        protected _init(_opt?: pEvent.IOption<_TEvent, any>): void {
+        this.log("Creating PeerConnection...");
+            super._init(_opt);
+            this.__alias_ = '[p2PConnector]';
+
+            this._pc = new RTCPeerConnection( {
+                iceServers: [ { urls: Constant.ice_server_url } ]
+            } )
+
+            this._pc.onicecandidate = _event => {
+                _event.candidate
+                    ? this.log("Ice candidate:", _event.candidate.candidate)
+                    : this.log("Ice candidate gathering complete");
+
+                const { localDescription, signalingState } = this._pc;
+                if(localDescription) {
+                    switch(signalingState) {
+                        case "have-local-offer":
+                        case "stable": {
+                            break;
+                        }
+                        case "have-local-pranswer":
+                        case "have-remote-offer": {
+                            break;
+                        }
+                    }
+                }
             }
-            case "have-local-pranswer":
-            case "have-remote-offer": {
-                break;
+
+            this._pc.ondatachannel = _event => {
+                this._dc = _event.channel;
+                this.invoke('onDataChannel', _event.channel);
             }
+
+            this.make_offer();
+        }
+
+        protected _is_making: boolean = false;
+        async apply_offer(message: string) {
+            const _offer = await pCrypto.unpacker(message);
+            await this._pc.setRemoteDescription(_offer);
+            const _answer = await this._pc.createAnswer();
+            await this._pc.setLocalDescription(_answer);
+
+            await this._wait_for_ice_gathering_complete();
+            const _out = await pCrypto.packer(this._pc.localDescription);
+            this.invoke('onHaveAnswer', _out);
+            return _out;
+        }
+
+        async make_offer() {
+            if(this._is_making) return "";
+            this.log("Making offer...");
+            this._is_making = true;
+            const _dc = this._pc.createDataChannel('chat', { ordered: true });
+            this._setdc(_dc);
+
+            const _offer = await this._pc.createOffer();
+            await this._pc.setLocalDescription(_offer);
+
+            await this._wait_for_ice_gathering_complete();
+            const _out = await pCrypto.packer(this._pc.localDescription);
+            this.invoke('onHaveOffer', _out);
+            this._is_making = false;
+            return _out;
+        }
+
+        async apply_answer(message: string) {
+            const _answer = await pCrypto.unpacker(message);
+            await this._pc.setRemoteDescription(_answer);
+            this.invoke('onConnected');
+        }
+
+        protected _wait_for_ice_gathering_complete(): Promise<void> {
+            if(this._pc.iceGatheringState === 'complete') return Promise.resolve();
+
+            return new Promise<void>( _rs => {
+                const _check = () => {
+                    if(this._pc.iceGatheringState === 'complete') {
+                        this._pc.removeEventListener('icegatheringstatechange', _check);
+                        _rs();
+                    }
+                }
+                this._pc.addEventListener('icegatheringstatechange', _check);
+            })
+        }
+
+        protected _setdc(_dc: RTCDataChannel) {
+            this._dc = _dc;
+            this._dc.onmessage = _event => this.invoke('onMessage', _event.data);
         }
     }
-}
 
-_pc.ondatachannel = _event => {
-    EventManager.invoke('onRTCDataChannel', _event.channel);
-}
-
-export default _pc;
+    const _ret = _p2PConnector.create({ global: true }) as _p2PConnector;
+//}
+export default _ret;
