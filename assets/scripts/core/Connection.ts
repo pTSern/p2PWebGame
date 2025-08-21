@@ -1,10 +1,6 @@
 import { _decorator, Button, Component, EditBox, instantiate, Prefab } from 'cc';
 import pComponent from '../utils/pComponent';
 import p2PConnector from './p2PConnector';
-import { pCrypto } from '../utils/pCrypto';
-import EventManager from '../event/EventManager';
-import { NSEventDefine } from '../event/EventDefine';
-import pEvent from '../utils/pEvent';
 
 const { ccclass, type } = _decorator;
 

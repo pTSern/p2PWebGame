@@ -17,7 +17,6 @@ import pEvent from "../utils/pEvent";
         protected _init(_opt?: pEvent.IOption<_TEvent, any>): void {
         this.log("Creating PeerConnection...");
             super._init(_opt);
-            this.__alias_ = '[p2PConnector]';
 
             this._pc = new RTCPeerConnection( {
                 iceServers: [ { urls: Constant.ice_server_url } ]
@@ -107,6 +106,6 @@ import pEvent from "../utils/pEvent";
         }
     }
 
-    const _ret = _p2PConnector.create({ global: true }) as _p2PConnector;
+    const _ret = _p2PConnector.create({ alias: 'p2PConnector', global: true }) as _p2PConnector;
 //}
 export default _ret;
