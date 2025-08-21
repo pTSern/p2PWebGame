@@ -24,16 +24,14 @@ export class Chat extends Component {
                 _binder: this
             }
         )
-        EventManager.on(this._events);
+        p2PConnector.on([
+            ['onMessage', this._on_message, this]
+        ]);
     }
 
     onDestroy(): void {
-        EventManager.off(this._events);
+        p2PConnector.off_from_binder(this);
     }
-
-    private _events: pEvent.TFlex<NSEventDefine.TEvents> = [
-        ['onMessage', this._on_message, this]
-    ]
 
     protected _act_send() {
         p2PConnector.dc.send(this.edit_chat.string);
